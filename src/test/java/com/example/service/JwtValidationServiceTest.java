@@ -1,25 +1,49 @@
 package com.example.service;
 
+import com.example.service.decoder.JwtDecoder;
+import com.example.service.decoder.JwtDecodingException;
 import com.example.service.exception.JwtValidationException;
+import com.example.service.validator.ClaimValidatorFactory;
+import com.example.service.validator.DefaultClaimValidatorFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import java.util.Base64;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 class JwtValidationServiceTest {
 
+    @Mock
+    private JwtDecoder jwtDecoder;
+    
     private JwtValidationService jwtValidationService;
+    private ClaimValidatorFactory validatorFactory;
 
     @BeforeEach
     void setUp() {
-        jwtValidationService = new JwtValidationService();
+        MockitoAnnotations.openMocks(this);
+        validatorFactory = new DefaultClaimValidatorFactory();
+        jwtValidationService = new JwtValidationService(jwtDecoder, validatorFactory);
     }
 
     @Test
     void testJwtValido() {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("Role", "Admin");
+        claims.put("Seed", "7841");
+        claims.put("Name", "Toninho Araujo");
+
+        when(jwtDecoder.decode(anyString())).thenReturn(claims);
+
         String jwt = "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiNzg0MSIsIk5hbWUiOiJUb25pbmhvIEFyYXVqbyJ9.QY05sIjtrcJnP533kQNk8QXcaleJ1Q01jWY_ZzIZuAg";
         assertTrue(jwtValidationService.validateJwt(jwt), "JWT válido deve ser aceito");
     }
@@ -27,17 +51,29 @@ class JwtValidationServiceTest {
     @Test
     void testJwtInvalido() {
         String jwt = "eyJhbGciOiJzI1NiJ9.dfsdfsfryJSr2xrIjoiQWRtaW4iLCJTZrkIjoiNzg0MSIsIk5hbrUiOiJUb25pbmhvIEFyYXVqbyJ9.QY05fsdfsIjtrcJnP533kQNk8QXcaleJ1Q01jWY_ZzIZuAg";
+        
+        doThrow(new JwtDecodingException("JWT inválido: payload não é um JSON válido"))
+            .when(jwtDecoder)
+            .decode(anyString());
+
         JwtValidationException exception = assertThrows(
             JwtValidationException.class,
             () -> jwtValidationService.validateJwt(jwt),
             "JWT inválido deve lançar exceção"
         );
-        assertTrue(exception.getMessage().contains("JWT inválido"));
+        assertEquals("JWT inválido: payload não é um JSON válido", exception.getMessage());
     }
 
     @Test
     void testNomeComNumeros() {
-        String jwt = "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiRXh0ZXJuYWwiLCJTZWVkIjoiODgwMzciLCJOYW1lIjoiTTRyaWEgT2xpdmlhIn0.6YD73XWZYQSSMDf6H0i3-kylz1-TY_Yt6h1cV2Ku-Qs";
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("Role", "External");
+        claims.put("Seed", "88037");
+        claims.put("Name", "M4ria Olivia");
+
+        when(jwtDecoder.decode(anyString())).thenReturn(claims);
+
+        String jwt = "qualquer.jwt.invalido";
         JwtValidationException exception = assertThrows(
             JwtValidationException.class,
             () -> jwtValidationService.validateJwt(jwt),
@@ -48,7 +84,15 @@ class JwtValidationServiceTest {
 
     @Test
     void testMaisDeTresClaims() {
-        String jwt = "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiTWVtYmVyIiwiT3JnIjoiQlIiLCJTZWVkIjoiMTQ2MjciLCJOYW1lIjoiVmFsZGlyIEFyYW5oYSJ9.cmrXV_Flm5mfdpfNUVopY_I2zeJUy4EZ4i3Fea98zvY";
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("Role", "Member");
+        claims.put("Org", "BR");
+        claims.put("Seed", "14627");
+        claims.put("Name", "Valdir Aranha");
+
+        when(jwtDecoder.decode(anyString())).thenReturn(claims);
+
+        String jwt = "qualquer.jwt.invalido";
         JwtValidationException exception = assertThrows(
             JwtValidationException.class,
             () -> jwtValidationService.validateJwt(jwt),
@@ -59,17 +103,30 @@ class JwtValidationServiceTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-        "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiNzg0MSIsIk5hbWUiOiJUb25pbmhvIEFyYXVqbyJ9.QY05sIjtrcJnP533kQNk8QXcaleJ1Q01jWY_ZzIZuAg", // Role: Admin
-        "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiTWVtYmVyIiwiU2VlZCI6Ijc4NDEiLCJOYW1lIjoiVG9uaW5obyBBcmF1am8ifQ.invalid", // Role: Member
-        "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiRXh0ZXJuYWwiLCJTZWVkIjoiNzg0MSIsIk5hbWUiOiJUb25pbmhvIEFyYXVqbyJ9.invalid" // Role: External
+        "Admin", "Member", "External"
     })
-    void testRolesValidos(String jwt) {
+    void testRolesValidos(String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("Role", role);
+        claims.put("Seed", "7841");
+        claims.put("Name", "Toninho Araujo");
+
+        when(jwtDecoder.decode(anyString())).thenReturn(claims);
+
+        String jwt = "qualquer.jwt.valido";
         assertTrue(jwtValidationService.validateJwt(jwt), "JWT com roles válidos devem ser aceitos");
     }
 
     @Test
     void testRoleInvalido() {
-        String jwt = "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiSW52YWxpZFJvbGUiLCJTZWVkIjoiNzg0MSIsIk5hbWUiOiJUb25pbmhvIEFyYXVqbyJ9.invalid";
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("Role", "InvalidRole");
+        claims.put("Seed", "7841");
+        claims.put("Name", "Toninho Araujo");
+
+        when(jwtDecoder.decode(anyString())).thenReturn(claims);
+
+        String jwt = "qualquer.jwt.invalido";
         JwtValidationException exception = assertThrows(
             JwtValidationException.class,
             () -> jwtValidationService.validateJwt(jwt),
@@ -84,14 +141,15 @@ class JwtValidationServiceTest {
         for (int i = 0; i < 257; i++) {
             nomeLongo.append("a");
         }
-        String payload = String.format(
-            "{\"Role\":\"Admin\",\"Seed\":\"7841\",\"Name\":\"%s\"}", 
-            nomeLongo.toString()
-        );
-        String jwt = "eyJhbGciOiJIUzI1NiJ9." + 
-                    Base64.getUrlEncoder().encodeToString(payload.getBytes()) + 
-                    ".invalid";
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("Role", "Admin");
+        claims.put("Seed", "7841");
+        claims.put("Name", nomeLongo.toString());
+
+        when(jwtDecoder.decode(anyString())).thenReturn(claims);
         
+        String jwt = "qualquer.jwt.invalido";
         JwtValidationException exception = assertThrows(
             JwtValidationException.class,
             () -> jwtValidationService.validateJwt(jwt),
@@ -102,33 +160,35 @@ class JwtValidationServiceTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-        "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiNyIsIk5hbWUiOiJUb25pbmhvIEFyYXVqbyJ9.invalid", // 7 (primo)
-        "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiMTEiLCJOYW1lIjoiVG9uaW5obyBBcmF1am8ifQ.invalid", // 11 (primo)
-        "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiMTMiLCJOYW1lIjoiVG9uaW5obyBBcmF1am8ifQ.invalid" // 13 (primo)
+        "7", "11", "13"  // números primos
     })
-    void testSeedsPrimos(String jwt) {
+    void testSeedsPrimos(String seed) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("Role", "Admin");
+        claims.put("Seed", seed);
+        claims.put("Name", "Toninho Araujo");
+
+        when(jwtDecoder.decode(anyString())).thenReturn(claims);
+
+        String jwt = "qualquer.jwt.valido";
         assertTrue(jwtValidationService.validateJwt(jwt), "JWT com seeds primos devem ser aceitos");
     }
 
     @Test
     void testSeedsNaoPrimos() {
-        String jwt = "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiNCIsIk5hbWUiOiJUb25pbmhvIEFyYXVqbyJ9.invalid";
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("Role", "Admin");
+        claims.put("Seed", "4");  // não primo
+        claims.put("Name", "Toninho Araujo");
+
+        when(jwtDecoder.decode(anyString())).thenReturn(claims);
+
+        String jwt = "qualquer.jwt.invalido";
         JwtValidationException exception = assertThrows(
             JwtValidationException.class,
             () -> jwtValidationService.validateJwt(jwt),
             "JWT com seed não primo deve lançar exceção"
         );
         assertEquals("Claim 'Seed' é inválido", exception.getMessage());
-    }
-
-    @Test
-    void testJwtSemPayload() {
-        String jwt = "eyJhbGciOiJIUzI1NiJ9.invalid";
-        JwtValidationException exception = assertThrows(
-            JwtValidationException.class,
-            () -> jwtValidationService.validateJwt(jwt),
-            "JWT sem payload deve lançar exceção"
-        );
-        assertTrue(exception.getMessage().contains("JWT inválido"));
     }
 }

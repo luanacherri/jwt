@@ -1,51 +1,27 @@
 package com.example.service;
 
 import com.example.service.validator.*;
+import com.example.service.decoder.JwtDecoder;
 import com.example.service.exception.JwtValidationException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import java.util.*;
 
 @Service
 public class JwtValidationService implements JwtValidatorService {
     
-    private final ObjectMapper objectMapper;
+    private final JwtDecoder jwtDecoder;
     private final List<ClaimValidator> validators;
 
-    public JwtValidationService() {
-        this.objectMapper = new ObjectMapper();
-        this.validators = Arrays.asList(
-            new NameClaimValidator(),
-            new RoleClaimValidator(),
-            new SeedClaimValidator()
-        );
+    public JwtValidationService(JwtDecoder jwtDecoder, ClaimValidatorFactory validatorFactory) {
+        this.jwtDecoder = jwtDecoder;
+        this.validators = validatorFactory.createValidators();
     }
 
     @Override
     public boolean validateJwt(String jwt) {
         try {
-            // Dividir o JWT em suas partes
-            String[] parts = jwt.split("\\.");
-            if (parts.length < 2) {
-                throw new JwtValidationException("JWT inválido: formato incorreto");
-            }
-
-            // Decodificar o payload
-            String payload;
-            try {
-                payload = new String(Base64.getUrlDecoder().decode(parts[1]));
-            } catch (IllegalArgumentException e) {
-                throw new JwtValidationException("JWT inválido: payload não está em Base64 válido");
-            }
-            
-            // Converter para Map
-            Map<String, Object> claims;
-            try {
-                claims = objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {});
-            } catch (Exception e) {
-                throw new JwtValidationException("JWT inválido: payload não é um JSON válido");
-            }
+            // Decodificar o JWT
+            Map<String, Object> claims = jwtDecoder.decode(jwt);
             
             // Verificar se contém exatamente as claims necessárias
             if (claims.size() != validators.size()) {
@@ -71,7 +47,7 @@ public class JwtValidationService implements JwtValidatorService {
             return true;
 
         } catch (JwtValidationException e) {
-            throw e; // Re-throw validation exceptions
+            throw e;
         } catch (Exception e) {
             throw new JwtValidationException("Erro ao validar JWT: " + e.getMessage());
         }
