@@ -1,6 +1,8 @@
 package com.example.controller;
 
+import com.example.controller.dto.JwtValidationResponse;
 import com.example.service.JwtValidationService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,12 +17,30 @@ public class JwtController {
     }
 
     @PostMapping("/validate")
-    public boolean validateJwtPost(@RequestBody String jwt) {
-        return jwtValidationService.validateJwt(jwt);
+    public ResponseEntity<JwtValidationResponse> validateJwtPost(@RequestBody String jwt) {
+        try {
+            boolean isValid = jwtValidationService.validateJwt(jwt);
+            JwtValidationResponse response = isValid 
+                ? JwtValidationResponse.valid() 
+                : JwtValidationResponse.invalid("JWT inválido");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(JwtValidationResponse.invalid(e.getMessage()));
+        }
     }
 
     @GetMapping("/validate")
-    public boolean validateJwtGet(@RequestParam String jwt) {
-        return jwtValidationService.validateJwt(jwt);
+    public ResponseEntity<JwtValidationResponse> validateJwtGet(@RequestParam String jwt) {
+        try {
+            boolean isValid = jwtValidationService.validateJwt(jwt);
+            JwtValidationResponse response = isValid 
+                ? JwtValidationResponse.valid() 
+                : JwtValidationResponse.invalid("JWT inválido");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body(JwtValidationResponse.invalid(e.getMessage()));
+        }
     }
 }

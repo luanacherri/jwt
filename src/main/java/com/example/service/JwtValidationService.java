@@ -1,71 +1,79 @@
 package com.example.service;
 
-import org.springframework.stereotype.Service;
+import com.example.service.validator.*;
+import com.example.service.exception.JwtValidationException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
 import java.util.*;
 
 @Service
-public class JwtValidationService {
+public class JwtValidationService implements JwtValidatorService {
     
-    private static final List<String> VALID_ROLES = Arrays.asList("Admin", "Member", "External");
-    private static final int MAX_NAME_LENGTH = 256;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    private final List<ClaimValidator> validators;
 
+    public JwtValidationService() {
+        this.objectMapper = new ObjectMapper();
+        this.validators = Arrays.asList(
+            new NameClaimValidator(),
+            new RoleClaimValidator(),
+            new SeedClaimValidator()
+        );
+    }
+
+    @Override
     public boolean validateJwt(String jwt) {
         try {
             // Dividir o JWT em suas partes
             String[] parts = jwt.split("\\.");
-            if (parts.length < 2) return false;
+            if (parts.length < 2) {
+                throw new JwtValidationException("JWT inválido: formato incorreto");
+            }
 
             // Decodificar o payload
-            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+            String payload;
+            try {
+                payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+            } catch (IllegalArgumentException e) {
+                throw new JwtValidationException("JWT inválido: payload não está em Base64 válido");
+            }
             
             // Converter para Map
-            Map<String, Object> claims = objectMapper.readValue(payload, Map.class);
-            
-            // Verificar se contém exatamente as 3 claims necessárias
-            if (claims.size() != 3 || !claims.containsKey("Name") || !claims.containsKey("Role") || !claims.containsKey("Seed")) {
-                return false;
-            }
-
-            String name = String.valueOf(claims.get("Name"));
-            String role = String.valueOf(claims.get("Role"));
-            String seedStr = String.valueOf(claims.get("Seed"));
-
-            // Converter a string do Seed para número
-            Integer seed = null;
+            Map<String, Object> claims;
             try {
-                seed = Integer.parseInt(seedStr);
-            } catch (NumberFormatException e) {
-                return false;
+                claims = objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                throw new JwtValidationException("JWT inválido: payload não é um JSON válido");
+            }
+            
+            // Verificar se contém exatamente as claims necessárias
+            if (claims.size() != validators.size()) {
+                throw new JwtValidationException(
+                    String.format("JWT deve conter exatamente %d claims (Name, Role, Seed)", validators.size())
+                );
             }
 
-            return validateName(name) &&
-                   validateRole(role) &&
-                   validateSeed(seed);
+            // Validar cada claim usando seu validador específico
+            for (ClaimValidator validator : validators) {
+                if (!claims.containsKey(validator.getClaimName())) {
+                    throw new JwtValidationException(
+                        String.format("Claim '%s' está faltando", validator.getClaimName())
+                    );
+                }
+                if (!validator.isValid(claims.get(validator.getClaimName()))) {
+                    throw new JwtValidationException(
+                        String.format("Claim '%s' é inválido", validator.getClaimName())
+                    );
+                }
+            }
 
+            return true;
+
+        } catch (JwtValidationException e) {
+            throw e; // Re-throw validation exceptions
         } catch (Exception e) {
-            System.out.println("Erro na validação: " + e.getMessage());
-            return false;
+            throw new JwtValidationException("Erro ao validar JWT: " + e.getMessage());
         }
-    }
-
-    private boolean validateName(String name) {
-        return name != null &&
-               name.length() <= MAX_NAME_LENGTH &&
-               !name.matches(".*\\d.*");
-    }
-
-    private boolean validateRole(String role) {
-        return VALID_ROLES.contains(role);
-    }
-
-    private boolean validateSeed(Integer seed) {
-        if (seed == null) return false;
-        if (seed <= 1) return false;
-        for (int i = 2; i <= Math.sqrt(seed); i++) {
-            if (seed % i == 0) return false;
-        }
-        return true;
     }
 }
