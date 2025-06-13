@@ -5,6 +5,11 @@ import com.example.service.decoder.JwtDecodingException;
 import com.example.service.exception.JwtValidationException;
 import com.example.service.validator.ClaimValidatorFactory;
 import com.example.service.validator.DefaultClaimValidatorFactory;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,14 +21,23 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.*;
 
 class JwtValidationServiceTest {
 
     @Mock
     private JwtDecoder jwtDecoder;
+    
+    @Mock
+    private Tracer tracer;
+    
+    @Mock
+    private SpanBuilder spanBuilder;
+    
+    @Mock
+    private Span span;
     
     private JwtValidationService jwtValidationService;
     private ClaimValidatorFactory validatorFactory;
@@ -32,7 +46,23 @@ class JwtValidationServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         validatorFactory = new DefaultClaimValidatorFactory();
-        jwtValidationService = new JwtValidationService(jwtDecoder, validatorFactory);
+        
+        // OpenTelemetry mock setup
+        when(tracer.spanBuilder(anyString())).thenReturn(spanBuilder);
+        when(spanBuilder.setParent(any(Context.class))).thenReturn(spanBuilder);
+        when(spanBuilder.setAttribute(anyString(), anyString())).thenReturn(spanBuilder);
+        when(spanBuilder.startSpan()).thenReturn(span);
+        doNothing().when(span).end();
+        
+        // Mock current context and span
+        try (var contextMock = mockStatic(Context.class);
+             var spanMock = mockStatic(Span.class)) {
+            Context mockContext = mock(Context.class);
+            contextMock.when(Context::current).thenReturn(mockContext);
+            spanMock.when(Span::current).thenReturn(span);
+        }
+        
+        jwtValidationService = new JwtValidationService(jwtDecoder, validatorFactory, tracer);
     }
 
     @Test

@@ -4,6 +4,11 @@ import com.example.controller.dto.JwtValidationRequest;
 import com.example.controller.dto.JwtValidationResponse;
 import com.example.service.JwtValidationService;
 import com.example.service.exception.JwtValidationException;
+import io.micrometer.observation.annotation.Observed;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -17,18 +22,24 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.WebRequest;
+import org.slf4j.MDC;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/jwt")
 @Tag(name = "JWT", description = "API para validação de JWTs")
 @CrossOrigin
+@Observed(name = "jwt.controller", contextualName = "jwt-validation-controller")
 public class JwtController {
     
     private static final Logger logger = LoggerFactory.getLogger(JwtController.class);
     private final JwtValidationService jwtValidationService;
+    private final Tracer tracer;
 
-    public JwtController(JwtValidationService jwtValidationService) {
+    public JwtController(JwtValidationService jwtValidationService, Tracer tracer) {
         this.jwtValidationService = jwtValidationService;
+        this.tracer = tracer;
+        logger.info("JwtController initialized");
     }
 
     @Operation(
@@ -45,13 +56,25 @@ public class JwtController {
         consumes = MediaType.APPLICATION_JSON_VALUE,
         produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @Observed(name = "jwt.validate", contextualName = "validate-jwt")
     public ResponseEntity<JwtValidationResponse> validateJwt(
             @Valid @RequestBody JwtValidationRequest request,
             WebRequest webRequest) {
         
-        logger.debug("Validando JWT via POST");
+        String requestId = UUID.randomUUID().toString();
+        MDC.put("requestId", requestId);
+        
+        Span span = tracer.spanBuilder("validateJwt")
+            .setAttribute("requestId", requestId)
+            .setParent(Context.current())
+            .startSpan();
+        
         try {
+            logger.info("Received JWT validation request [requestId={}]", requestId);
+            span.setAttribute("jwt.length", request.getJwt().length());
+            
             boolean isValid = jwtValidationService.validateJwt(request.getJwt());
+            
             JwtValidationResponse response = isValid 
                 ? JwtValidationResponse.valid() 
                 : JwtValidationResponse.invalid("JWT inválido");
@@ -64,10 +87,18 @@ public class JwtController {
                 .instance(webRequest.getDescription(false))
                 .build();
 
+            span.setAttribute("jwt.valid", response.isValid());
+            span.setStatus(StatusCode.OK);
+            
+            logger.info("JWT validation completed - Result: {} [requestId={}]", 
+                response.isValid() ? "VALID" : "INVALID", requestId);
+            
             return ResponseEntity.ok(response);
 
         } catch (JwtValidationException e) {
-            logger.warn("Erro de validação do JWT: {}", e.getMessage());
+            logger.warn("JWT validation failed: {} [requestId={}]", e.getMessage(), requestId);
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+            span.recordException(e);
             return ResponseEntity.badRequest()
                 .body(JwtValidationResponse.builder()
                     .valid(false)
@@ -78,7 +109,9 @@ public class JwtController {
                     .build());
 
         } catch (Exception e) {
-            logger.error("Erro inesperado ao validar JWT", e);
+            logger.error("Unexpected error during JWT validation [requestId={}]", requestId, e);
+            span.setStatus(StatusCode.ERROR, "Internal error occurred");
+            span.recordException(e);
             return ResponseEntity.internalServerError()
                 .body(JwtValidationResponse.builder()
                     .valid(false)
@@ -87,6 +120,9 @@ public class JwtController {
                     .detail("Ocorreu um erro inesperado ao validar o JWT")
                     .instance(webRequest.getDescription(false))
                     .build());
+        } finally {
+            span.end();
+            MDC.remove("requestId");
         }
     }
 }
