@@ -1,0 +1,125 @@
+{
+  "info": {
+    "_postman_id": "jwt-validator-collection",
+    "name": "JWT Validator API",
+    "description": "Coleção de requests para testar a API de validação de JWTs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Validar JWT (Válido)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"jwt\": \"eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiNzg0MSIsIk5hbWUiOiJUb25pbmhvIEFyYXVqbyJ9.QY05sIjtrcJnP533kQNk8QXcaleJ1Q01jWY_ZzIZuAg\"}"
+        },
+        "url": {
+          "raw": "http://localhost:8081/api/v1/jwt/validate",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8081",
+          "path": ["api", "v1", "jwt", "validate"]
+        },
+        "description": "Valida um JWT com claims válidos"
+      },
+      "response": []
+    },
+    {
+      "name": "Validar JWT (Nome Inválido)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"jwt\": \"eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiRXh0ZXJuYWwiLCJTZWVkIjoiODgwMzciLCJOYW1lIjoiTTRyaWEgT2xpdmlhIn0.6YD73XWZYQSSMDf6H0i3-kylz1-TY_Yt6h1cV2Ku-Qs\"}"
+        },
+        "url": {
+          "raw": "http://localhost:8081/api/v1/jwt/validate",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8081",
+          "path": ["api", "v1", "jwt", "validate"]
+        },
+        "description": "Valida um JWT com claim Name contendo números"
+      },
+      "response": []
+    },
+    {
+      "name": "Validar JWT (Role Inválida)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"jwt\": \"eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiVXNlciIsIlNlZWQiOiI3ODQxIiwiTmFtZSI6IlRvbmluaG8gQXJhdWpvIn0.QY05sIjtrcJnP533kQNk8QXcaleJ1Q01jWY_ZzIZuAg\"}"
+        },
+        "url": {
+          "raw": "http://localhost:8081/api/v1/jwt/validate",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8081",
+          "path": ["api", "v1", "jwt", "validate"]
+        },
+        "description": "Valida um JWT com claim Role não permitida"
+      },
+      "response": []
+    },
+    {
+      "name": "Validar JWT (Seed Inválido)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"jwt\": \"eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiMTAwIiwiTmFtZSI6IlRvbmluaG8gQXJhdWpvIn0.QY05sIjtrcJnP533kQNk8QXcaleJ1Q01jWY_ZzIZuAg\"}"
+        },
+        "url": {
+          "raw": "http://localhost:8081/api/v1/jwt/validate",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8081",
+          "path": ["api", "v1", "jwt", "validate"]
+        },
+        "description": "Valida um JWT com claim Seed não primo"
+      },
+      "response": []
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8081/actuator/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8081",
+          "path": ["actuator", "health"]
+        },
+        "description": "Verifica o status da aplicação"
+      },
+      "response": []
+    }
+  ]
+}
